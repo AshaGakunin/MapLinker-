@@ -1,8 +1,8 @@
 {
-  "Name": "MapLinker",
-  "Author": "Bluefissure",
+  "Name": "MapLinker-",
+  "Author": "Asha Gakunin",
   "Punchline": "Record the maplinks in chat",
   "Description": "Automatically record the maplinks in chat and retrieval later.",
-  "RepoUrl": "https://github.com/Bluefissure/MapLinker",
-  "IconUrl": "https://raw.githubusercontent.com/Bluefissure/MapLinker/master/images/icon.png"
+  "RepoUrl": "https://github.com/AshaGakunin/MapLinker-",
+  "IconUrl": "https://raw.githubusercontent.com/AshaGakunin/MapLinker/master/images/icon.png"
 }
