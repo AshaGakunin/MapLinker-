@@ -1,0 +1,27 @@
+[
+    {
+        "Author": "Zaria V",
+        "Name": "ModBattles",
+        "Punchline": "Battle with others in a game of skill and luck.",
+        "Description": "/MB to or hit the gear icon to get to the main page.",
+        "InternalName": "ModBattles",
+        "AssemblyVersion": "1.2.0.5",
+        "RepoUrl": "https://github.com/AshaGakunin/Battle",
+        "ApplicableVersion": "any",
+        "Tags": [
+            "Battle"
+        ],
+        "DalamudApiLevel": 8,
+        "IsHide": "False",
+        "IsTestingExclusive": "False",
+        "DownloadCount": 0,
+        "LastUpdate": 0,
+        "LoadPriority": 69421,
+        "LoadRequiredState": 2,
+        "LoadSync": true,
+        "DownloadLinkInstall": "https://github.com/AshaGakunin/Battle/releases/download/1.2.0.5/latestr.zip",
+        "DownloadLinkTesting": "https://github.com/AshaGakunin/Battle/releases/download/1.2.0.5/latestr.zip",
+        "DownloadLinkUpdate": "https://github.com/AshaGakunin/Battle/releases/download/1.2.0.5/latestr.zip"
+
+    }
+]
