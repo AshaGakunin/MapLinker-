@@ -33,6 +33,7 @@ namespace MapLinker
         public bool BringFront = false;
         public bool MessageWrap = false;
         public List<ushort> FilteredChannels = new List<ushort>();
+        public List<string> PlayerTPWhiteList = new List<string>();
         // public List<ushort> RecordingChannels = new List<ushort> { };
 
 
