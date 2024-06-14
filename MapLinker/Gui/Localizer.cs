@@ -92,6 +92,20 @@ namespace MapLinker.Gui
             zh.Add("Message Wrap", "消息换行");
             zh.Add("Line Wrap for message column.", "消息列的换行。");
             zh.Add("Target", "目标");
+            //Additions
+                zh.Add("Player White List", "玩家白名单");
+                zh.Add("Prompt Teleport When Flag Is Relayed In Chat", "在聊天中转发标志时提示传送");
+                zh.Add("Will create a popup asking if the player would like to be teleported when a flag is put into chat. You can choose to only have this happen on white listed players by selecting the 'Prompt for White List Players Only'", "将创建一个弹出窗口，询问玩家是否愿意在将旗帜放入聊天时被传送。您可以通过选择\"仅限白名单玩家的提示\"来选择仅在白名单玩家上执行此操作");
+                zh.Add("Prompt for White List Players Only", "仅白名单玩家提示");
+                zh.Add("This setting will only prompt teleport from flags put into chat by white listed players.", "此设置只会提示从白名单玩家放入聊天中的标志传送。");
+                zh.Add("Add players to the white list from the zone you are in.", "将玩家从您所在的区域添加到白名单。");
+                zh.Add("Player to Add", "要添加的播放器");
+                zh.Add("Add To White List", "加入白名单");
+                zh.Add("Home World", "家庭世界");
+                zh.Add("It is faster to Fly", "飞得更快");
+                zh.Add("It is faster to Teleport", "传送速度更快");
+                zh.Add("", "");
+
         }
     }
 }

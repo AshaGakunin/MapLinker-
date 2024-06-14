@@ -16,6 +16,13 @@ using Dalamud.Game.Gui;
 using Dalamud.Logging;
 using System.Collections.Generic;
 using Dalamud.Plugin.Services;
+using Dalamud.IoC;
+using Dalamud.Utility;
+using ImGuiNET;
+using MapLinker.Gui;
+using System.Threading.Tasks;
+using System.Threading;
+using static Dalamud.Plugin.Services.IFramework;
 
 namespace MapLinker
 {
@@ -31,6 +38,11 @@ namespace MapLinker
         public IFramework Framework { get; private set; }
         public IChatGui ChatGui { get; private set; }
         public IGameGui GameGui { get; private set; }
+        
+
+        //Additions
+            [PluginService][RequiredVersion("1.0")] public static IObjectTable Obj { get; private set; } = null!;
+            
 
         public Configuration Config { get; private set; }
         public PlayerCharacter LocalPlayer => ClientState.LocalPlayer;
@@ -39,12 +51,15 @@ namespace MapLinker
 
         public Lumina.Excel.ExcelSheet<Aetheryte> Aetherytes = null;
         public Lumina.Excel.ExcelSheet<MapMarker> AetherytesMap = null;
+        private Localizer _localizer;
 
         public void Dispose()
         {
+            Framework.Update -= PollPlayerCombatStatus;
             ChatGui.ChatMessage -= Chat_OnChatMessage;
             CommandManager.RemoveHandler("/maplink");
             Gui?.Dispose();
+            
         }
 
         public MapLinker(
@@ -74,8 +89,27 @@ namespace MapLinker
                 HelpMessage = "/maplink - open the maplink panel."
             });
             Gui = new PluginUi(this);
+            if (Config.TeleportQueued)
+            {
+                if (LocalPlayer.StatusFlags.HasFlag(Dalamud.Game.ClientState.Objects.Enums.StatusFlags.InCombat))
+                {
+                    if (Config.TeleportQueuedLocation != null)
+                    {
+                        PlaceMapMarker(Config.TeleportQueuedLocation);
+                        TeleportToAetheryte(Config.TeleportQueuedLocation);
+                        Config.TeleportQueuedLocation = null;
+                        Config.TeleportQueued = false;
+                    }
+
+                }
+            }
+            ClientState.LocalPlayer.StatusFlags.HasFlag(Dalamud.Game.ClientState.Objects.Enums.StatusFlags.InCombat);
             ChatGui.ChatMessage += Chat_OnChatMessage;
+            Framework.Update += PollPlayerCombatStatus;
         }
+
+       
+
         public void CommandHandler(string command, string arguments)
         {
             var args = arguments.Trim().Replace("\"", string.Empty);
@@ -185,6 +219,66 @@ namespace MapLinker
             return ((41.0 / c) * ((val + 1024.0) / 2048.0)) + 1;
         }
 
+        //Addition
+            public bool AetheryteCloserThanPlayer(MapLinkMessage flag,MapLinkMessage PlayerPosition)
+            {
+                bool decision = false;
+                foreach (var data in Aetherytes)
+                {
+                    if (!decision)
+                    {
+                        if (!data.IsAetheryte) continue;
+                        if (data.Territory.Value == null) continue;
+                        if (data.PlaceName.Value == null) continue;
+                        var scale = flag.Scale;
+                        if (data.Territory.Value.RowId == flag.TerritoryId)
+                        {
+                            {
+                                var mapMarker = AetherytesMap.FirstOrDefault(m => (m.DataType == 3 && m.DataKey == data.RowId));
+                                if (mapMarker == null)
+                                {
+                                    continue;
+                                }
+                                var AethersX = ConvertMapMarkerToMapCoordinate(mapMarker.X, scale);
+                                var AethersY = ConvertMapMarkerToMapCoordinate(mapMarker.Y, scale);
+                                double temp_distance_flag_to_aetheryte = Math.Pow(AethersX - flag.X, 2) + Math.Pow(AethersY - flag.Y, 2);
+                                double temp_distance_flag_to_player = Math.Pow(PlayerPosition.X - flag.X, 2) + Math.Pow(PlayerPosition.Y - flag.Y, 2);
+                                //PluginLog.Log("Flag to aetheryte distance " + temp_distance_flag_to_aetheryte.ToString() + " vs Player to flag distance " + temp_distance_flag_to_player.ToString());
+                                if (temp_distance_flag_to_aetheryte < temp_distance_flag_to_player)
+                                {
+                                    //PluginLog.Log("an atheryte is closer");
+                                    decision = true;
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                }
+                return decision;
+            }
+            private void PollPlayerCombatStatus(IFramework framework)
+            {
+                //PluginLog.Log("Would Have Teleported Here");
+               
+                if (Config.TeleportQueued)
+                {
+                    PluginLog.Log(Config.TeleportQueued.ToString());
+                    if (!ClientState.LocalPlayer.StatusFlags.HasFlag(Dalamud.Game.ClientState.Objects.Enums.StatusFlags.InCombat))
+                    {
+                        TeleportToAetheryte(Config.TeleportQueuedLocation);
+                        PlaceMapMarker(Config.TeleportQueuedLocation);
+                        Config.TeleportQueued = false;
+                    }
+                }
+                
+            }
+            public void SetTeleportQueue(bool Queued, MapLinkMessage Place)
+            {
+                
+                Config.TeleportQueued= Queued;
+                Config.TeleportQueuedLocation= Place;
+                PluginLog.Log("Setting Teleport Queded To true: " + Config.TeleportQueued.ToString());
+            }
 
         public string GetNearestAetheryte(MapLinkMessage maplinkMessage)
         {
@@ -299,6 +393,140 @@ namespace MapLinker
                         maplinkPayload.PlaceName,
                         DateTime.Now
                     );
+
+                //Additions
+                if (Config.PromptTeleport)
+                {
+
+                    //Calculate if Tping is actually worth it
+                        var TpCheckTest = false;
+                        if (maplinkPayload.TerritoryType.RowId == ClientState.TerritoryType)
+                        { 
+                            var playerPositon = new MapLinkMessage(
+                                (ushort)type,
+                                LocalPlayer.Name.TextValue,
+                                messageText,
+                                LocalPlayer.GetMapCoordinates().X,
+                                LocalPlayer.GetMapCoordinates().Y,
+                                scale,
+                                ClientState.TerritoryType,
+                                maplinkPayload.PlaceName,
+                                DateTime.Now
+                            );
+                            TpCheckTest = AetheryteCloserThanPlayer(newMapLinkMessage, playerPositon);
+                        }
+                        else { TpCheckTest = true; }
+                        PluginLog.Log(" Worth It Or Not To TP:" + TpCheckTest.ToString());
+                    if (TpCheckTest)
+                    {
+                        if (Config.WhiteListOnly)
+                        {
+                            //Gather Sender Name
+                            //Removes special characters people can put on friends in their friends list.
+                            var charsToRemove = new string[] { "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "" };
+                            string senderstring = sender.ToString();
+                            foreach (var c in charsToRemove)
+                            {
+                                senderstring = senderstring.Replace(c, string.Empty);
+                            }
+
+
+                            var homeworld = "";
+                            try
+                            {
+                                homeworld = sender.Payloads[0].ToString().Split(",")[2].Split(": ")[1];
+                            }
+                            catch (Exception e) { PluginLog.Log("no probably player"); }
+
+                            if (LocalPlayer.Name.ToString() != sender.TextValue)
+                            {
+                                for (int i = 0; i < Config.PlayerTPWhiteList.Count; i++)
+                                {
+
+                                    if (Config.PlayerTPWhiteList[i].Name == sender.TextValue)
+                                    {
+                                        PluginLog.Log(sender.TextValue + " offering a place to tp you");
+
+                                        Config.MostRecentMapLink = newMapLinkMessage;
+                                        Config.PromptWindowGoal = "It is faster to Teleport";
+
+                                        PluginLog.Log("Tp check is true white list is false");
+                                        Config.PopupOpen = true;
+
+                                        try
+                                        {
+                                            //Gui.ConfigWindow.Draw();
+                                            Gui.ConfigWindow.Visible = true;
+                                        }
+                                        catch (Exception e) { PluginLog.Log(e.ToString()); }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                for (int i = 0; i < Config.PlayerTPWhiteList.Count; i++)
+                                {
+                                    // if (sender.ToString() == Config.PlayerTPWhiteList[i].Name)
+                                    //{
+                                    //PluginLog.Log("Yes this matched");
+                                    //}
+                                    //PluginLog.Log(Config.PlayerTPWhiteList[i].Name+" " + Config.PlayerTPWhiteList[i].HomeWorld);
+                                }
+                                //PluginLog.Log(sender.ToString()+" VS "+sender.TextValue);
+                                //TeleportToAetheryte(newMapLinkMessage);
+                            }
+                        }
+                        else
+                        {
+
+
+                            if (!Config.TeleportQueued)
+                            {
+                                if (!(Config.MostRecentMapLink.X == newMapLinkMessage.X && Config.MostRecentMapLink.Y == newMapLinkMessage.Y && Config.MostRecentMapLink.TerritoryId == newMapLinkMessage.TerritoryId))
+                                {
+                                    Config.MostRecentMapLink = newMapLinkMessage;
+                                    Config.PromptWindowGoal = "It is faster to Teleport";
+
+                                    PluginLog.Log("Tp check is true white list is false");
+                                    Config.PopupOpen = true;
+                                    
+                                    try
+                                    {
+                                        //Gui.ConfigWindow.Draw();
+                                        Gui.ConfigWindow.Visible = true;
+                                    }
+                                    catch (Exception e) { PluginLog.Log(e.ToString()); }
+
+
+                                }
+
+                            }
+
+
+                        }
+                    }
+                    else
+                    {
+                        if (!(Config.MostRecentMapLink.X == newMapLinkMessage.X && Config.MostRecentMapLink.Y == newMapLinkMessage.Y && Config.MostRecentMapLink.TerritoryId == newMapLinkMessage.TerritoryId))
+                        {
+                            Config.MostRecentMapLink = newMapLinkMessage;
+                            Config.PromptWindowGoal = "It is faster to Fly";
+
+                            PluginLog.Log("Tp check is false");
+                            Config.PopupOpen = true;
+                            try
+                            {
+                                Gui.ConfigWindow.Visible = true;
+                            }
+                            catch (Exception e) { PluginLog.Log(e.ToString()); }
+
+
+                        }
+                    }
+                }
+
+
+                
                 bool filteredOut = false;
                 if (sender.TextValue.ToLower() == "sonar")
                     filteredOut = true;
@@ -332,6 +560,9 @@ namespace MapLinker
                         Native.Impl.Activate();
                     }
                 }
+
+                
+
             }
         }
 

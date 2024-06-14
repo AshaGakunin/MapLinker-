@@ -8,6 +8,10 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Data;
 using Lumina.Excel.GeneratedSheets;
 using MapLinker.Objects;
+using Dalamud.Game.ClientState.Objects.SubKinds;
+using Dalamud.Logging;
+using static MapLinker.Configuration;
+using Dalamud.Interface.Utility.Table;
 
 namespace MapLinker.Gui
 {
@@ -18,7 +22,6 @@ namespace MapLinker.Gui
         private readonly string[] _languageList;
         private int _selectedLanguage;
         private Localizer _localizer;
-
         public List<XivChatType> HiddenChatType = new List<XivChatType> {
             XivChatType.None,
             XivChatType.CustomEmote,
@@ -29,6 +32,10 @@ namespace MapLinker.Gui
             XivChatType.ErrorMessage,
             XivChatType.RetainerSale
         };
+        //Additions
+            private static List<WhiteListPlayer> playerList = new List<WhiteListPlayer>();
+            
+            private static int item_current_idx = 0;
 
         public ConfigurationWindow(MapLinker plugin) : base(plugin)
         {
@@ -51,11 +58,12 @@ namespace MapLinker.Gui
                 }
             }
             ImGui.SetNextWindowSize(new Vector2(530, 450), ImGuiCond.FirstUseEver);
-            if (!ImGui.Begin($"{Plugin.Name} {_localizer.Localize("Panel")}", ref WindowVisible, ImGuiWindowFlags.NoScrollWithMouse))
+            if (!ImGui.Begin($"{Plugin.Name} {_localizer.Localize("Panel")}", ref WindowVisible, ImGuiWindowFlags.NoScrollWithMouse|ImGuiWindowFlags.NoCollapse))
             {
                 ImGui.End();
                 return;
             }
+            //DrawPopup();
             if (ImGui.BeginTabBar(_localizer.Localize("TabBar")))
             {
                 if (ImGui.BeginTabItem(_localizer.Localize("Settings") + "##Tab"))
@@ -79,8 +87,26 @@ namespace MapLinker.Gui
                     }
                     ImGui.EndTabItem();
                 }
+                //Additions
+                    if (ImGui.BeginTabItem(_localizer.Localize("Player White List") + "##Tab"))
+                    {
+                        if (ImGui.BeginChild("##PlayerWhiteListRegion"))
+                        {
+                            DrawPlayerWhiteList();
+                            ImGui.EndChild();
+                        }
+                        ImGui.EndTabItem();
+                    }
+
+
                 ImGui.EndTabBar();
             }
+            
+
+           
+
+            
+            //ImGui.OpenPopup(_localizer.Localize(Config.PromptWindowGoal));
             ImGui.End();
         }
 
@@ -88,6 +114,19 @@ namespace MapLinker.Gui
 
         private void DrawGeneralSettings()
         {
+
+            //Additions
+                if(ImGui.Checkbox(_localizer.Localize("Prompt Teleport When Flag Is Relayed In Chat"), ref Config.PromptTeleport)) Config.Save();
+                if(Config.ShowTooltips && ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip(_localizer.Localize("Will create a popup asking if the player would like to be teleported when a flag is put into chat. You can choose to only have this happen on white listed players by selecting the 'Prompt for White List Players Only'"));
+                }
+                if (ImGui.Checkbox(_localizer.Localize("Prompt for White List Players Only"), ref Config.WhiteListOnly)) Config.Save();
+                if (Config.ShowTooltips && ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip(_localizer.Localize("This setting will only prompt teleport from flags put into chat by white listed players."));
+
+                }
             if (ImGui.Checkbox(_localizer.Localize("Recording"), ref Config.Recording)) Config.Save();
             if (Config.ShowTooltips && ImGui.IsItemHovered())
                 ImGui.SetTooltip(_localizer.Localize("Automatically record messages with maplink and retrieve later."));
@@ -264,5 +303,316 @@ namespace MapLinker.Gui
 
         }
 
+        //Additions
+            private void DrawPlayerWhiteList()
+            {
+                int columns = 3;
+                var green = new Vector4(0.16470588235294117f, 0.7215686274509804f, 0.10980392156862745f, .8f);
+                var red = new Vector4(1.0f, 0.0f, 0.0f, .8f);
+                var blue = new Vector4(0.15294117647058825f, 0.5058823529411764f, 0.9607843137254902f, .8f);
+                var orange = new Vector4(0.9607843137254902f, 0.5725490196078431f, 0.15294117647058825f, .8f);
+                ImGui.Text(_localizer.Localize("Player White List"));
+
+            if (ImGui.BeginPopup(_localizer.Localize(Config.PromptWindowGoal),ImGuiWindowFlags.Popup))
+            {
+                if (Config.PromptWindowGoal == "It is faster to Teleport")
+                {
+                    if (Plugin.ClientState.LocalPlayer?.StatusFlags.HasFlag(Dalamud.Game.ClientState.Objects.Enums.StatusFlags.InCombat) == true)
+                    {
+                        ImGui.PushStyleColor(ImGuiCol.Button, orange);
+                        if (ImGui.Button(_localizer.Localize("Teleport After Combat")))
+                        {
+                            Config.TeleportQueuedLocation = Config.MostRecentMapLink;
+                            Config.TeleportQueued = true;
+                            ImGui.CloseCurrentPopup();
+                            Config.PopupOpen = false;
+                            try
+                            {
+                                //Gui.ConfigWindow.Draw();
+                                Visible = false;
+                            }
+                            catch (Exception e) { PluginLog.Log(e.ToString()); }
+                        }
+                        try { ImGui.PopStyleColor(); } catch (Exception e) { }
+                    }
+                    else
+                    {
+                        ImGui.PushStyleColor(ImGuiCol.Button, green);
+                        if (ImGui.Button(_localizer.Localize("Teleport")))
+                        {
+                            Plugin.TeleportToAetheryte(Config.MostRecentMapLink);
+                            Plugin.PlaceMapMarker(Config.MostRecentMapLink);
+                            ImGui.CloseCurrentPopup();
+                            Config.PopupOpen = false;
+                            try
+                            {
+                                //Gui.ConfigWindow.Draw();
+                                Visible = false;
+                            }
+                            catch (Exception e) { PluginLog.Log(e.ToString()); }
+                        }
+                        try { ImGui.PopStyleColor(); } catch (Exception e) { }
+                    }
+                    ImGui.SameLine();
+                    ImGui.PushStyleColor(ImGuiCol.Button, blue);
+                    if (ImGui.Button(_localizer.Localize("Place Map Marker")))
+                    {
+                        Plugin.PlaceMapMarker(Config.MostRecentMapLink);
+                        Config.PopupOpen = false;
+                        ImGui.CloseCurrentPopup();
+                        try
+                        {
+                            //Gui.ConfigWindow.Draw();
+                            Visible = false;
+                        }
+                        catch (Exception e) { PluginLog.Log(e.ToString()); }
+                    }
+                    try { ImGui.PopStyleColor(); } catch (Exception e) { }
+                    ImGui.SameLine();
+                    ImGui.PushStyleColor(ImGuiCol.Button, red);
+                    if (ImGui.Button(_localizer.Localize("Close")))
+                    {
+                        ImGui.CloseCurrentPopup();
+                        Config.PopupOpen = false;
+                        Visible = false;
+                    }
+                    try { ImGui.PopStyleColor(); } catch (Exception e) { }
+                }
+                else
+                {
+                    ImGui.PushStyleColor(ImGuiCol.Button, blue);
+                    if (ImGui.Button(_localizer.Localize("Place Map Marker")))
+                    {
+                        Plugin.PlaceMapMarker(Config.MostRecentMapLink);
+                        Config.PopupOpen = false;
+                        ImGui.CloseCurrentPopup();
+                        Visible = false;
+                    }
+                    try { ImGui.PopStyleColor(); } catch (Exception e) { }
+                    ImGui.SameLine();
+                    ImGui.PushStyleColor(ImGuiCol.Button, red);
+                    if (ImGui.Button(_localizer.Localize("Close")))
+                    {
+                        ImGui.CloseCurrentPopup();
+                        Config.PopupOpen = false;
+                        Visible=false;
+                    }
+                    try { ImGui.PopStyleColor(); } catch (Exception e) { }
+                }
+                ImGui.EndPopup();
+            }
+           
+            if (ImGui.IsPopupOpen(_localizer.Localize(Config.PromptWindowGoal)))
+            {
+                ImGui.Text("Test");
+            }
+            else
+            {
+                if (Config.PopupOpen)
+                {
+                    ImGui.OpenPopup(_localizer.Localize(Config.PromptWindowGoal));
+                }
+               
+            }
+            for (int n = 0; n < MapLinker.Obj.Length; n++)
+                {
+                    if (MapLinker.Obj[n] != null)
+                    {
+                        if (MapLinker.Obj[n].ObjectKind.ToString() == "Player")
+                        {
+
+
+                            var check = true;
+                            if (playerList.Count > 0)
+                            {
+
+                                for (var g = 0; g < playerList.Count; g++)
+                                {
+                                    if (playerList[g].Name == MapLinker.Obj[n].Name.ToString())
+                                    {
+                                        check = false;
+                                    }
+
+                                }
+                            }
+                            if (check)
+                            {
+                                PlayerCharacter ThisPlayer = (PlayerCharacter)MapLinker.Obj[n];
+                                var p = new WhiteListPlayer();
+                                p.Name = MapLinker.Obj[n].Name.ToString();
+                                p.HomeWorld = ThisPlayer.HomeWorld.GameData.Name.ToString();
+                                playerList.Add(p);
+                            }
+
+
+                        }
+                    }
+
+                }
+
+                if (playerList.Count > 0)
+                {
+                    try
+                    {
+                        string combo_preview_value = playerList[item_current_idx].Name;
+                        if (ImGui.BeginCombo(_localizer.Localize("Player to Add"), combo_preview_value))
+                        {
+
+
+                            var lengthObj = playerList.Count;
+                            for (int n = 0; n < lengthObj; n++)
+                            {
+
+
+                                bool is_selected = item_current_idx == n;
+
+
+                                if (ImGui.Selectable(playerList[n].Name, true))
+                                    item_current_idx = n;
+
+
+                                if (is_selected)
+
+                                    ImGui.SetItemDefaultFocus();
+                                // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+
+                            }
+                            ImGui.EndCombo();
+
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        PluginLog.Log(e.ToString());
+                        if (item_current_idx != 0)
+                        {
+                            item_current_idx--;
+
+                        }
+                        else
+                        {
+                            item_current_idx = 0;
+                        }
+
+
+                    }
+                }
+                ImGui.SameLine();
+                
+                ImGui.PushStyleColor(ImGuiCol.Button, green);
+                if (ImGui.Button(_localizer.Localize("Add To White List")))
+                {
+
+                    Config.PlayerTPWhiteList.Add(playerList[item_current_idx]);
+                }
+                try
+                {
+                    ImGui.PopStyleColor();
+                }
+                catch (Exception e) { }
+
+                ImGui.Text(_localizer.Localize("Add players to the white list from the zone you are in."));
+                ImGui.Separator();
+                ImGui.Columns(columns, _localizer.Localize("Player White List"), true);
+                ImGui.Text(_localizer.Localize("Player")); ImGui.NextColumn();
+                ImGui.TextWrapped(_localizer.Localize("Home World")); ImGui.NextColumn();
+                ImGui.Text(_localizer.Localize("Delete")); ImGui.NextColumn();
+                ImGui.Separator();
+                for(int i=0; i<Config.PlayerTPWhiteList.Count; i++){
+                    ImGui.Text(Config.PlayerTPWhiteList[i].Name); ImGui.NextColumn();
+                    ImGui.Text(Config.PlayerTPWhiteList[i].HomeWorld); ImGui.NextColumn();
+                    ImGui.PushStyleColor(ImGuiCol.Button, red);
+                    if (ImGui.Button(_localizer.Localize("Delete") + "##" + i.ToString()))
+                    {
+                        PluginLog.Log("Removing "+Config.PlayerTPWhiteList[i].Name);
+                        Config.PlayerTPWhiteList.RemoveAt(i);
+                    }
+                    try{ ImGui.PopStyleColor(); }catch(Exception e) { }
+                    ImGui.NextColumn();
+                    //ImGui.Text("Remove at " + i);
+                    //ImGui.NextColumn();
+                    ImGui.Separator();
+
+                }   
+
+        }
+            private void DrawPopup()
+            {
+                int columns = 3;
+                var green = new Vector4(0.16470588235294117f, 0.7215686274509804f, 0.10980392156862745f, .8f);
+                var red = new Vector4(1.0f, 0.0f, 0.0f, .8f);
+                var blue = new Vector4(0.15294117647058825f, 0.5058823529411764f, 0.9607843137254902f, .8f);
+                var orange = new Vector4(0.9607843137254902f, 0.5725490196078431f, 0.15294117647058825f, .8f);
+                
+
+                if (ImGui.BeginPopup(_localizer.Localize(Config.PromptWindowGoal), ImGuiWindowFlags.Popup))
+                {
+                    if (Config.PromptWindowGoal == "It is faster to Teleport")
+                    {
+                        if (Plugin.ClientState.LocalPlayer?.StatusFlags.HasFlag(Dalamud.Game.ClientState.Objects.Enums.StatusFlags.InCombat) == true)
+                        {
+                            ImGui.PushStyleColor(ImGuiCol.Button, orange);
+                            if (ImGui.Button(_localizer.Localize("Teleport and Place Map Marker")))
+                            {
+                                Plugin.SetTeleportQueue(true, Config.MostRecentMapLink);
+                                //Config.TeleportQueuedLocation = Config.MostRecentMapLink;
+                                //Config.TeleportQueued = true;
+                                ImGui.CloseCurrentPopup();
+                                Config.PopupOpen = false;
+                            }
+                            try { ImGui.PopStyleColor(); } catch (Exception e) { }
+                        }
+                        else
+                        {
+                            ImGui.PushStyleColor(ImGuiCol.Button, green);
+                            if (ImGui.Button(_localizer.Localize("Teleport and Place Map Marker")))
+                            {
+                                Plugin.TeleportToAetheryte(Config.MostRecentMapLink);
+                                Plugin.PlaceMapMarker(Config.MostRecentMapLink);
+                                ImGui.CloseCurrentPopup();
+                                Config.PopupOpen = false;
+                            }
+                            try { ImGui.PopStyleColor(); } catch (Exception e) { }
+                        }
+                        ImGui.SameLine();
+                        ImGui.PushStyleColor(ImGuiCol.Button, blue);
+                        if (ImGui.Button(_localizer.Localize("Place Map Marker")))
+                        {
+                            Plugin.PlaceMapMarker(Config.MostRecentMapLink);
+                            Config.PopupOpen = false;
+                            ImGui.CloseCurrentPopup();
+                        }
+                        try { ImGui.PopStyleColor(); } catch (Exception e) { }
+                        ImGui.SameLine();
+                        ImGui.PushStyleColor(ImGuiCol.Button, red);
+                        if (ImGui.Button(_localizer.Localize("Close")))
+                        {
+                            ImGui.CloseCurrentPopup();
+                            Config.PopupOpen = false;
+                        }
+                        try { ImGui.PopStyleColor(); } catch (Exception e) { }
+                    }
+                    else
+                    {
+                        ImGui.PushStyleColor(ImGuiCol.Button, blue);
+                        if (ImGui.Button(_localizer.Localize("Place Map Marker")))
+                        {
+                            Plugin.PlaceMapMarker(Config.MostRecentMapLink);
+                            Config.PopupOpen = false;
+                            ImGui.CloseCurrentPopup();
+                        }
+                        try { ImGui.PopStyleColor(); } catch (Exception e) { }
+                        ImGui.SameLine();
+                        ImGui.PushStyleColor(ImGuiCol.Button, red);
+                        if (ImGui.Button(_localizer.Localize("Close")))
+                        {
+                            ImGui.CloseCurrentPopup();
+                            Config.PopupOpen = false;
+                        }
+                        try { ImGui.PopStyleColor(); } catch (Exception e) { }
+                    }
+                    ImGui.EndPopup();
+                }       
+            }
     }
 }

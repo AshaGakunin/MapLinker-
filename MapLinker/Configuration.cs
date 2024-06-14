@@ -5,6 +5,8 @@ using Dalamud.Plugin;
 using Dalamud.Game.Text;
 using MapLinker.Objects;
 using System.Linq;
+using MapLinker.Gui;
+using Dalamud.Plugin.Services;
 
 namespace MapLinker
 {
@@ -33,7 +35,24 @@ namespace MapLinker
         public bool BringFront = false;
         public bool MessageWrap = false;
         public List<ushort> FilteredChannels = new List<ushort>();
-        public List<string> PlayerTPWhiteList = new List<string>();
+
+       
+        //Additions 
+            public bool PromptTeleport=false;
+            public bool WhiteListOnly = true;
+            public List<WhiteListPlayer> PlayerTPWhiteList = new List<WhiteListPlayer>();
+            public class WhiteListPlayer
+            {
+                public string Name { get; set; }
+                public string HomeWorld { get; set; }
+            }
+            public MapLinkMessage MostRecentMapLink = null;
+            public String PromptWindowGoal="";
+            public bool PopupOpen = true;
+            public MapLinkMessage TeleportQueuedLocation = null;
+            public bool TeleportQueued = false;
+            
+        
         // public List<ushort> RecordingChannels = new List<ushort> { };
 
 
